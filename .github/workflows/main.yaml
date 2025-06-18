@@ -8,7 +8,8 @@ on:
 
 env:
   IMAGE_NAME: metric-app                 # Docker 이미지 이름이다.
-  GHCR_REPOSITORY: ${{ github.repository_owner }}/metric-app # GHCR 저장소 경로이다.
+  # GHCR_REPOSITORY 변수를 정의할 때 github.repository_owner를 소문자로 변환
+  GHCR_REPOSITORY: ${{ toLower(github.repository_owner) }}/metric-app # GHCR 저장소 경로이다.
 
 jobs:
   build-and-push:
@@ -18,36 +19,29 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4 # 리포지토리 코드를 워크플로우 런너로 가져온다.
 
-    # Python 환경 설정 (선택 사항이지만 명시하는 것이 좋다)
     - name: Set up Python 3.9
       uses: actions/setup-python@v5
       with:
         python-version: '3.9' # 사용할 Python 버전을 지정한다.
 
-    # Python 종속성 설치 (Dockerfile 내부에서 처리되므로 CI 단계에서는 불필요할 수 있다.
-    # 하지만 테스트 등을 CI 단계에서 별도로 실행한다면 필요하다.)
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-      # 이곳에서 Python 단위/통합 테스트를 실행할 수 있다.
-      # run: |
-      #   pytest # 예를 들어, pytest를 사용한다면
 
     - name: Log in to GitHub Container Registry
       uses: docker/login-action@v3
       with:
         registry: ghcr.io
-        username: ${{ secrets.GHCR_USERNAME }} # GitHub Actions 시크릿에서 GHCR 사용자 이름을 가져온다.
-        password: ${{ secrets.GHCR_TOKEN }}   # GitHub Actions 시크릿에서 GHCR 토큰을 가져온다.
+        username: ${{ secrets.GHCR_USERNAME }}
+        password: ${{ secrets.GHCR_TOKEN }}
 
     - name: Build and push Docker image
       run: |
-        # Docker 이미지 태그를 생성한다 (Git 커밋 SHA와 'latest' 태그 사용).
         IMAGE_TAG=${{ github.sha }}
+        # GHCR_REPOSITORY 환경 변수를 사용하여 Docker 태그 생성
         docker build -t ghcr.io/${{ env.GHCR_REPOSITORY }}:${IMAGE_TAG} .
         docker push ghcr.io/${{ env.GHCR_REPOSITORY }}:${IMAGE_TAG}
 
-        # 'latest' 태그도 추가하여 푸시한다.
         docker tag ghcr.io/${{ env.GHCR_REPOSITORY }}:${IMAGE_TAG} ghcr.io/${{ env.GHCR_REPOSITORY }}:latest
         docker push ghcr.io/${{ env.GHCR_REPOSITORY }}:latest
