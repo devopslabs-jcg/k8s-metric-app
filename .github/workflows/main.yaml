@@ -8,8 +8,8 @@ on:
 
 env:
   IMAGE_NAME: metric-app                 # Docker 이미지 이름이다.
-  # GHCR_REPOSITORY 변수를 정의할 때 github.repository_owner를 소문자로 변환
-  GHCR_REPOSITORY: ${{ toLower(github.repository_owner) }}/metric-app # GHCR 저장소 경로이다.
+  # GHCR_REPOSITORY 변수를 정의할 때 github.repository_owner를 소문자로 변환 (lower 함수 사용)
+  GHCR_REPOSITORY: ${{ lower(github.repository_owner) }}/metric-app # GHCR 저장소 경로이다.
 
 jobs:
   build-and-push:
@@ -36,7 +36,7 @@ jobs:
         username: ${{ secrets.GHCR_USERNAME }}
         password: ${{ secrets.GHCR_TOKEN }}
 
-    - name: Build and push Docker image!
+    - name: Build and push Docker image
       run: |
         IMAGE_TAG=${{ github.sha }}
         # GHCR_REPOSITORY 환경 변수를 사용하여 Docker 태그 생성
