@@ -1,1 +1,1 @@
-#s k8s-metric-app
+#sk8s-metric-app
