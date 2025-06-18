@@ -3,62 +3,64 @@ name: Build and Deploy Metric App
 
 on:
   push:
-    branches: [main]
+    branches: [main] # main 브랜치에 푸시될 때 워크플로우 실행
 
 jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    # --- 이 permissions 블록을 추가합니다! ---
+  build-and-deploy: # job 이름 변경
+    runs-on: ubuntu-latest # GitHub Actions 러너 환경
     permissions:
-      contents: write # GitOps 리포지토리에 커밋/푸시하기 위한 권한 (아래 Checkout GitOps Configs repository 단계에서 사용)
-      packages: write # GHCR에 이미지를 푸시하기 위한 권한 (가장 중요!)
-                      # GITHUB_TOKEN을 사용할 때 organization package denied 오류 해결
-    # ----------------------------------------
+      contents: write # GitOps 리포지토리에 커밋/푸시하기 위한 권한
+      packages: write # GHCR에 이미지를 푸시하기 위한 권한 (organization package denied 오류 해결)
 
     steps:
       - name: Checkout application code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4 # 현재 리포지토리 (k8s-metric-app) 코드 체크아웃
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v3 # GHCR 로그인 액션 사용
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }} # <--- GITHUB_TOKEN 그대로 사용
+          username: ${{ github.actor }} # GitHub 사용자 이름 (자동으로 현재 워크플로우를 트리거한 사용자)
+          password: ${{ secrets.GITHUB_TOKEN }} # GITHUB_TOKEN 사용
 
-      - name: Set image tag
+      - name: Set image tag # 이미지 태그를 위한 변수 설정 (여기서는 'latest'를 기본으로 사용)
         id: vars
-        run: echo "IMAGE_TAG=latest" >> $GITHUB_ENV
+        run: echo "IMAGE_TAG=latest" >> $GITHUB_ENV # 또는 "IMAGE_TAG=$(date +%s)"
 
       - name: Build and push Docker image to GHCR
         run: |
+          # GHCR 리포지토리 경로 (ghcr.io/계정명/리포지토리명)
+          # ${{ github.repository }}는 'devopslabs-jcg/k8s-metric-app' 형태로 제공됩니다.
           FULL_IMAGE_NAME="ghcr.io/${{ github.repository }}"
-          docker build -t $FULL_IMAGE_NAME:$IMAGE_TAG .
-          docker push $FULL_IMAGE_NAME:$IMAGE_TAG
+          
+          docker build -t $FULL_IMAGE_NAME:$IMAGE_TAG . # 이미지 빌드
+          docker push $FULL_IMAGE_NAME:$IMAGE_TAG # GHCR로 푸시
         env:
-          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+          IMAGE_TAG: ${{ env.IMAGE_TAG }} # 위에서 설정한 TAG 환경 변수 사용
 
-      - name: Checkout GitOps Configs repository
+      - name: Checkout GitOps Configs repository # GitOps CD 리포지토리 체크아웃
         uses: actions/checkout@v4
         with:
-          repository: devopslabs-jcg/k8s-gitops-configs
-          path: k8s-gitops-configs
-          # GITHUB_TOKEN으로도 이 리포에 푸시할 수 있도록 권한을 위에서 contents: write 로 주었습니다.
-          # ACTION_PUBLIC_TOKEN (PAT)을 계속 사용해도 무방합니다.
-          # 하지만 GITHUB_TOKEN만을 사용하고 싶으시다면 여기도 GITHUB_TOKEN으로 변경해야 합니다.
-          # 토큰을 하나로 통일하려면:
-          token: ${{ secrets.GITHUB_TOKEN }} # <--- 만약 GitOps repo 푸시도 GITHUB_TOKEN으로 하려면 변경
-                                          # 아니면 기존 ${{ secrets.ACTION_PUBLIC_TOKEN }} 유지
-                                          # (ACTION_PUBLIC_TOKEN이 k8s-gitops-configs에 쓰기 권한이 있어야 함)
+          repository: devopslabs-jcg/k8s-gitops-configs # CD 리포지토리 주소 직접 명시
+          path: k8s-gitops-configs # 러너에 체크아웃될 경로
+          token: ${{ secrets.GITHUB_TOKEN }} # GITHUB_TOKEN 사용 (permissions에 contents: write 필요)
 
-      - name: Update image tag in Helm values and Push
+      - name: Update image tag in Helm values and Push # Helm values.yaml 업데이트 및 푸시
         run: |
-          cd k8s-gitops-configs
-          sed -i "s|tag: .*|tag: ${{ env.IMAGE_TAG }}|g" kubernetes-app-charts/metric-app/values.yaml
+          cd k8s-gitops-configs # 체크아웃한 GitOps 리포지토리 경로로 이동
+          
+          # values.yaml 파일의 image.tag 값을 업데이트합니다.
+          # 확인된 정확한 경로: k8s-app-helm-charts/metric-app/values.yaml
+          sed -i "s|tag: .*|tag: ${{ env.IMAGE_TAG }}|g" k8s-app-helm-charts/metric-app/values.yaml
+
+          # Git 설정 (Actions 봇이 커밋하도록)
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add kubernetes-app-charts/metric-app/values.yaml
-          git commit -m "Update metric-app image tag to ${{ env.IMAGE_TAG }} [skip ci]"
+
+          # 변경사항 커밋 및 푸시
+          git add k8s-app-helm-charts/metric-app/values.yaml # 변경된 values.yaml 파일 추가
+          # [skip ci]는 k8s-gitops-configs 리포지토리에서 불필요한 CI 트리거를 방지합니다.
+          git commit -m "Update metric-app image tag to ${{ env.IMAGE_TAG }} [skip ci]" 
           git push
         env:
-          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+          IMAGE_TAG: ${{ env.IMAGE_TAG }} # 위에서 설정한 TAG 환경 변수 사용
