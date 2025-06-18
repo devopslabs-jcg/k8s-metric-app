@@ -1,4 +1,5 @@
 # .github/workflows/deploy.yml
+
 name: Build and Deploy Metric App
 
 on:
@@ -8,9 +9,11 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+
     permissions:
-      contents: write
-      packages: write
+      contents: write      # GitOps repo에 푸시
+      packages: write      # GHCR 푸시
+      id-token: write      # (OIDC 인증용 – optional)
 
     steps:
       - name: Checkout application code
@@ -39,20 +42,19 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: devopslabs-jcg/k8s-gitops-configs
+          token: ${{ secrets.GITHUB_TOKEN }}  # ✅ GitHub Actions에서 자동 제공하는 토큰 사용
           path: k8s-gitops-configs
-          token: ${{ secrets.GITOPS_PAT }} # 👉 Fine-grained PAT 사용
 
-      - name: Update image tag in Helm values and Push
+      - name: Update image tag in Helm values and push
         run: |
           cd k8s-gitops-configs
-
-          sed -i "s|tag: .*|tag: ${{ env.IMAGE_TAG }}|g" k8s-app-helm-charts/metric-app/values.yaml
+          sed -i "s|tag: .*|tag: $IMAGE_TAG|g" k8s-app-helm-charts/metric-app/values.yaml
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           git add k8s-app-helm-charts/metric-app/values.yaml
-          git commit -m "Update metric-app image tag to ${{ env.IMAGE_TAG }} [skip ci]"
+          git commit -m "Update metric-app image tag to $IMAGE_TAG [skip ci]" || echo "No changes to commit"
           git push
         env:
           IMAGE_TAG: ${{ env.IMAGE_TAG }}
