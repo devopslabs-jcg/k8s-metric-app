@@ -8,8 +8,9 @@ on:
 
 env:
   IMAGE_NAME: metric-app                 # Docker 이미지 이름이다.
-  # GHCR_REPOSITORY 변수를 정의할 때 github.repository_owner를 소문자로 변환 (lower 함수 사용)
-  GHCR_REPOSITORY: ${{ lower(github.repository_owner) }}/metric-app # GHCR 저장소 경로이다.
+  # Organization 이름을 소문자로 변경했다면, github.repository_owner가 이미 소문자일 것이므로
+  # 추가적인 변환 함수(lower()) 없이 바로 사용한다.
+  GHCR_REPOSITORY: ${{ github.repository_owner }}/metric-app # GHCR 저장소 경로이다.
 
 jobs:
   build-and-push:
@@ -33,15 +34,18 @@ jobs:
       uses: docker/login-action@v3
       with:
         registry: ghcr.io
-        username: ${{ secrets.GHCR_USERNAME }}
-        password: ${{ secrets.GHCR_TOKEN }}
+        username: ${{ secrets.GHCR_USERNAME }} # GitHub Actions 시크릿에서 GHCR 사용자 이름을 가져온다.
+        password: ${{ secrets.GHCR_TOKEN }}   # GitHub Actions 시크릿에서 GHCR 토큰을 가져온다.
 
     - name: Build and push Docker image
       run: |
+        # Docker 이미지 태그를 생성한다 (Git 커밋 SHA와 'latest' 태그 사용).
         IMAGE_TAG=${{ github.sha }}
-        # GHCR_REPOSITORY 환경 변수를 사용하여 Docker 태그 생성
+        
+        # GHCR_REPOSITORY 환경 변수에 이미 올바른 소문자 경로가 있다고 가정한다.
         docker build -t ghcr.io/${{ env.GHCR_REPOSITORY }}:${IMAGE_TAG} .
         docker push ghcr.io/${{ env.GHCR_REPOSITORY }}:${IMAGE_TAG}
 
+        # 'latest' 태그도 추가하여 푸시한다.
         docker tag ghcr.io/${{ env.GHCR_REPOSITORY }}:${IMAGE_TAG} ghcr.io/${{ env.GHCR_REPOSITORY }}:latest
         docker push ghcr.io/${{ env.GHCR_REPOSITORY }}:latest
