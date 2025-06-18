@@ -21,16 +21,17 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }} # GitHub 사용자 이름 (자동으로 현재 워크플로우를 트리거한 사용자)
-          password: <span class="math-inline">\{\{ secrets\.GITHUB\_TOKEN \}\} \# GITHUB\_TOKEN 사용
-\- name\: Set image tag 
-id\: vars
-run\: echo "IMAGE\_TAG\=</span>{{ github.sha }}" >> $GITHUB_ENV # Git Commit SHA를 이미지 태그로 사용 (고유성 보장)
+          password: ${{ secrets.GITHUB_TOKEN }} # GITHUB_TOKEN 사용
+
+      - name: Set image tag 
+        id: vars
+        run: echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV # Git Commit SHA를 이미지 태그로 사용 (고유성 보장)
 
       - name: Build and push Docker image to GHCR
         run: |
           # GHCR 리포지토리 경로 (ghcr.io/계정명/리포지토리명)
-          # <span class="math-inline">\{\{ github\.repository \}\}는 'devopslabs\-jcg/k8s\-metric\-app' 형태로 제공됩니다\.
-FULL\_IMAGE\_NAME\="ghcr\.io/</span>{{ github.repository }}"
+          # ${{ github.repository }}는 'devopslabs-jcg/k8s-metric-app' 형태로 제공됩니다.
+          FULL_IMAGE_NAME="ghcr.io/${{ github.repository }}"
           
           docker build -t $FULL_IMAGE_NAME:$IMAGE_TAG . # 이미지 빌드
           docker push $FULL_IMAGE_NAME:$IMAGE_TAG # GHCR로 푸시
@@ -50,4 +51,16 @@ FULL\_IMAGE\_NAME\="ghcr\.io/</span>{{ github.repository }}"
           
           # values.yaml 파일의 image.tag 값을 업데이트합니다.
           # 확인된 정확한 경로: k8s-app-helm-charts/metric-app/values.yaml
-          sed -i "s|tag: .*|tag: ${{ env.IMAGE_TAG }}|g
+          sed -i "s|tag: .*|tag: ${{ env.IMAGE_TAG }}|g" k8s-app-helm-charts/metric-app/values.yaml
+
+          # Git 설정 (Actions 봇이 커밋하도록)
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # 변경사항 커밋 및 푸시
+          git add k8s-app-helm-charts/metric-app/values.yaml # 변경된 values.yaml 파일 추가
+          # [skip ci]는 k8s-gitops-configs 리포지토리에서 불필요한 CI 트리거를 방지합니다.
+          git commit -m "Update metric-app image tag to ${{ env.IMAGE_TAG }} [skip ci]" 
+          git push
+        env:
+          IMAGE_TAG: ${{ env.IMAGE_TAG }} # 위에서 설정한 TAG 환경 변수 사용
