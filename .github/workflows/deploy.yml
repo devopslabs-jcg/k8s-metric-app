@@ -22,7 +22,7 @@ jobs:
       contents: read
       packages: write
     outputs:
-      # 다음 job에서 사용할 이미지 태그(commit SHA)를 출력으로 지정
+      # 다음 job에서 사용할 이미지 태그(commit SHA)를 출력으로 지정 (latest 고정 시 불필요하나, 워크플로우 일관성을 위해 유지)
       image_tag: ${{ steps.vars.outputs.sha_short }}
 
     steps:
@@ -49,7 +49,10 @@ jobs:
           context: ./backend
           file: ./backend/Dockerfile
           push: true
-          tags: ${{ env.GHCR_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${{ steps.vars.outputs.sha_short }}
+          # 커밋 해시 태그와 'latest' 태그를 동시에 푸시합니다.
+          tags: |
+            ${{ env.GHCR_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${{ steps.vars.outputs.sha_short }}
+            ${{ env.GHCR_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:latest # <-- 이 라인 추가
 
       - name: Build and push frontend image
         uses: docker/build-push-action@v5
@@ -57,13 +60,18 @@ jobs:
           context: ./frontend
           file: ./frontend/Dockerfile.prod
           push: true
-          tags: ${{ env.GHCR_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ steps.vars.outputs.sha_short }}
+          # 커밋 해시 태그와 'latest' 태그를 동시에 푸시합니다.
+          tags: |
+            ${{ env.GHCR_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ steps.vars.outputs.sha_short }}
+            ${{ env.GHCR_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:latest # <-- 이 라인 추가
 
   update-gitops:
     runs-on: ubuntu-latest
     # build job이 성공해야만 실행됨
     needs: build
-    
+    permissions: # contents: write 권한 필요
+      contents: write
+
     steps:
       - name: Checkout GitOps Configs repository
         uses: actions/checkout@v4
@@ -73,13 +81,15 @@ jobs:
 
       - name: Update backend image tag in Helm values
         run: |
-          # sed 명령어: backend.image.tag 라인을 찾아 태그를 변경
-          sed -i "s|tag:.*# backend-tag|tag: ${{ needs.build.outputs.image_tag }} # backend-tag|g" k8s-app-helm-charts/kubewatch/values.yaml
-        
+          # sed 명령어: backend.image.tag 라인을 찾아 태그를 'latest'로 고정
+          # needs.build.outputs.image_tag 변수 대신 'latest' 사용
+          sed -i "s|tag:.*# backend-tag|tag: latest # backend-tag|g" k8s-app-helm-charts/kubewatch/values.yaml
+
       - name: Update frontend image tag in Helm values
         run: |
-          # sed 명령어: frontend.image.tag 라인을 찾아 태그를 변경
-          sed -i "s|tag:.*# frontend-tag|tag: ${{ needs.build.outputs.image_tag }} # frontend-tag|g" k8s-app-helm-charts/kubewatch/values.yaml
+          # sed 명령어: frontend.image.tag 라인을 찾아 태그를 'latest'로 고정
+          # needs.build.outputs.image_tag 변수 대신 'latest' 사용
+          sed -i "s|tag:.*# frontend-tag|tag: latest # frontend-tag|g" k8s-app-helm-charts/kubewatch/values.yaml
 
       - name: Commit and push changes
         run: |
@@ -88,7 +98,7 @@ jobs:
           git add k8s-app-helm-charts/kubewatch/values.yaml
           # 변경 사항이 있을 때만 커밋
           if ! git diff --staged --quiet; then
-            git commit -m "Update KubeWatch image tag to ${{ needs.build.outputs.image_tag }} [skip ci]"
+            git commit -m "Update KubeWatch image tag to latest [skip ci]"
             git push
           else
             echo "No changes to commit in values.yaml"
