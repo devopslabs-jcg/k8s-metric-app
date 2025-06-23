@@ -1,0 +1,13 @@
+/* src/components/PodTable.css */
+
+/* DataGrid 행을 위한 깜빡임 애니메이션 정의 */
+@keyframes blink {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: #ffeb3b; } /* 밝은 노란색으로 깜빡임 */
+}
+
+/* DataGrid 행에 적용될 클래스 */
+.MuiDataGrid-row.new-pod-row {
+  /* 15번 깜빡이도록 설정 (총 7.5초) */
+  animation: blink 0.5s linear 15;
+}
