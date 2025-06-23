@@ -6,6 +6,12 @@ RUN npm install
 COPY . .
 RUN npm run build
 
+# 빌드 시점에 'VITE_SOCKET_URL'이라는 변수를 받음
+ARG VITE_SOCKET_URL
+
+# 컨테이너가 실행될 때 'VITE_SOCKET_URL' 환경 변수를 설정
+ENV VITE_SOCKET_URL=$VITE_SOCKET_URL
+
 # 2단계: Nginx 서버로 정적 파일 서빙
 FROM nginx:1.25-alpine
 # 빌드된 React 앱 정적 파일을 Nginx의 웹 루트로 복사
