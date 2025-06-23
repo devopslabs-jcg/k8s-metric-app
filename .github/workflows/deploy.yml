@@ -1,57 +1,71 @@
-name: Build and Deploy Metric App
+name: CI - Build and Push KubeWatch Docker Images
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+    # [개선] 특정 폴더에 변경이 있을 때만 실행되도록 최적화
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
 
 jobs:
-  build-and-deploy:
+  build-backend:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      packages: write
+    # [개선] 백엔드 코드가 변경되었을 때만 이 job을 실행
+    if: github.event_name == 'push' && contains(toJson(github.event.commits), 'backend/')
 
     steps:
-      - name: Checkout application code
+      - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_TOKEN }}   # 변경됨
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set image tag 
-        id: vars
-        run: echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
-
-      - name: Build and push Docker image to GHCR
-        run: |
-          FULL_IMAGE_NAME="ghcr.io/${{ github.repository }}"
-          docker build -t $FULL_IMAGE_NAME:$IMAGE_TAG .
-          docker push $FULL_IMAGE_NAME:$IMAGE_TAG
-        env:
-          IMAGE_TAG: ${{ env.IMAGE_TAG }}
-
-      - name: Checkout GitOps Configs repository
-        uses: actions/checkout@v4
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
         with:
-          repository: devopslabs-jcg/k8s-gitops-configs
-          path: k8s-gitops-configs
-          token: ${{ secrets.GHCR_TOKEN }}    # 변경됨
+          # [수정] 빌드 컨텍스트를 backend 폴더로 지정
+          context: ./backend
+          # [수정] Dockerfile의 위치를 명시
+          file: ./backend/Dockerfile
+          push: true
+          # [수정] 이미지 이름을 values.yaml과 일치시킴
+          tags: ghcr.io/devopslabs-jcg/kubewatch-backend:latest
 
-      - name: Update image tag in Helm values and Push
-        run: |
-          cd k8s-gitops-configs
-          sed -i "s|tag: .*|tag: $IMAGE_TAG|g" k8s-app-helm-charts/metric-app/values.yaml
+  build-frontend:
+    runs-on: ubuntu-latest
+    # [개선] 프론트엔드 코드가 변경되었을 때만 이 job을 실행
+    if: github.event_name == 'push' && contains(toJson(github.event.commits), 'frontend/')
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-          git add k8s-app-helm-charts/metric-app/values.yaml
-          git commit -m "Update metric-app image tag to $IMAGE_TAG [skip ci]" || echo "No changes to commit"
-          git push
-        env:
-          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          # [수정] 빌드 컨텍스트를 frontend 폴더로 지정
+          context: ./frontend
+          # [수정] 프로덕션용 Dockerfile 위치를 명시
+          file: ./frontend/Dockerfile.prod
+          push: true
+          # [수정] 이미지 이름을 values.yaml과 일치시킴
+          tags: ghcr.io/devopslabs-jcg/kubewatch-frontend:latest
