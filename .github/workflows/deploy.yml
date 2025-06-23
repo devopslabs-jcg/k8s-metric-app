@@ -22,7 +22,7 @@ jobs:
       contents: read
       packages: write
     outputs:
-      # 다음 job에서 사용할 이미지 태그(commit SHA)를 출력으로 지정 (latest 고정 시 불필요하나, 워크플로우 일관성을 위해 유지)
+      # 다음 job에서 사용할 이미지 태그(commit SHA)를 출력으로 지정
       image_tag: ${{ steps.vars.outputs.sha_short }}
 
     steps:
@@ -52,10 +52,10 @@ jobs:
           # 커밋 해시 태그와 'latest' 태그를 동시에 푸시합니다.
           tags: |
             ${{ env.GHCR_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${{ steps.vars.outputs.sha_short }}
-            ${{ env.GHCR_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:latest # <-- 이 라인 추가
+            ${{ env.GHCR_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:latest
 
       - name: Build and push frontend image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v5 # <-- 'uses' 줄의 들여쓰기를 수정했습니다.
         with:
           context: ./frontend
           file: ./frontend/Dockerfile.prod
@@ -63,7 +63,7 @@ jobs:
           # 커밋 해시 태그와 'latest' 태그를 동시에 푸시합니다.
           tags: |
             ${{ env.GHCR_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ steps.vars.outputs.sha_short }}
-            ${{ env.GHCR_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:latest # <-- 이 라인 추가
+            ${{ env.GHCR_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:latest
 
   update-gitops:
     runs-on: ubuntu-latest
