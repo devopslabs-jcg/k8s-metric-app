@@ -1,22 +1,29 @@
-name: CI - Build and Push KubeWatch Docker Images
+name: Build, Push, and Update GitOps
 
 on:
   push:
     branches:
       - main
-    # 특정 폴더에 변경이 있을 때만 실행되도록 최적화
     paths:
       - 'backend/**'
       - 'frontend/**'
-      - '.github/workflows/**' # 워크플로우 파일 자체 변경 시에도 실행
+      - '.github/workflows/**'
+
+env:
+  # GHCR 주소와 이미지 이름을 변수로 관리
+  GHCR_REGISTRY: ghcr.io
+  BACKEND_IMAGE_NAME: ${{ github.repository_owner }}/kubewatch-backend
+  FRONTEND_IMAGE_NAME: ${{ github.repository_owner }}/kubewatch-frontend
 
 jobs:
-  build-backend:
+  build:
     runs-on: ubuntu-latest
-    # 백엔드 코드가 변경되었을 때만 이 job을 실행
-    if: |
-      github.event_name == 'push' && 
-      (contains(toJson(github.event.commits), 'backend/') || contains(toJson(github.event.commits), '.github/workflows/'))
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      # 다음 job에서 사용할 이미지 태그(commit SHA)를 출력으로 지정
+      image_tag: ${{ steps.vars.outputs.sha_short }}
 
     steps:
       - name: Checkout repository
@@ -28,49 +35,61 @@ jobs:
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: ${{ env.GHCR_REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }} # GHCR은 GITHUB_TOKEN 사용이 표준
+
+      - name: Extract commit SHA as image tag
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Build and push backend image
         uses: docker/build-push-action@v5
         with:
-          # [핵심] 빌드 컨텍스트를 backend 폴더로 지정
           context: ./backend
-          # [핵심] Dockerfile의 위치를 명시
           file: ./backend/Dockerfile
           push: true
-          # [핵심] 이미지 이름을 kubewatch-backend로 지정
-          tags: ghcr.io/devopslabs-jcg/kubewatch-backend:latest
-
-  build-frontend:
-    runs-on: ubuntu-latest
-    # 프론트엔드 코드가 변경되었을 때만 이 job을 실행.
-    if: |
-      github.event_name == 'push' &&
-      (contains(toJson(github.event.commits), 'frontend/') || contains(toJson(github.event.commits), '.github/workflows/'))
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          tags: ${{ env.GHCR_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${{ steps.vars.outputs.sha_short }}
 
       - name: Build and push frontend image
         uses: docker/build-push-action@v5
         with:
-          # [핵심] 빌드 컨텍스트를 frontend 폴더로 지정
           context: ./frontend
-          # [핵심] 프로덕션용 Dockerfile 위치를 명시
           file: ./frontend/Dockerfile.prod
           push: true
-          # [핵심] 이미지 이름을 kubewatch-frontend로 지정
-          tags: ghcr.io/devopslabs-jcg/kubewatch-frontend:latest
+          tags: ${{ env.GHCR_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ steps.vars.outputs.sha_short }}
+
+  update-gitops:
+    runs-on: ubuntu-latest
+    # build job이 성공해야만 실행됨
+    needs: build
+    
+    steps:
+      - name: Checkout GitOps Configs repository
+        uses: actions/checkout@v4
+        with:
+          repository: devopslabs-jcg/k8s-gitops-configs
+          token: ${{ secrets.GH_PAT }} # 다른 리포지토리에 push하기 위한 PAT
+
+      - name: Update backend image tag in Helm values
+        run: |
+          # sed 명령어: backend.image.tag 라인을 찾아 태그를 변경
+          sed -i "s|tag:.*# backend-tag|tag: ${{ needs.build.outputs.image_tag }} # backend-tag|g" k8s-app-helm-charts/kubewatch/values.yaml
+        
+      - name: Update frontend image tag in Helm values
+        run: |
+          # sed 명령어: frontend.image.tag 라인을 찾아 태그를 변경
+          sed -i "s|tag:.*# frontend-tag|tag: ${{ needs.build.outputs.image_tag }} # frontend-tag|g" k8s-app-helm-charts/kubewatch/values.yaml
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add k8s-app-helm-charts/kubewatch/values.yaml
+          # 변경 사항이 있을 때만 커밋
+          if ! git diff --staged --quiet; then
+            git commit -m "Update KubeWatch image tag to ${{ needs.build.outputs.image_tag }} [skip ci]"
+            git push
+          else
+            echo "No changes to commit in values.yaml"
+          fi
