@@ -45,7 +45,7 @@ jobs:
 
   build-frontend:
     runs-on: ubuntu-latest
-    # 프론트엔드 코드가 변경되었을 때만 이 job을 실행
+    # 프론트엔드 코드가 변경되었을 때만 이 job을 실행.
     if: |
       github.event_name == 'push' &&
       (contains(toJson(github.event.commits), 'frontend/') || contains(toJson(github.event.commits), '.github/workflows/'))
