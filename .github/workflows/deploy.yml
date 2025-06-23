@@ -69,7 +69,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: devopslabs-jcg/k8s-gitops-configs
-          token: ${{ secrets.GH_PAT }} # 다른 리포지토리에 push하기 위한 PAT
+          token: ${{ secrets.GHCR_TOKEN }} # 다른 리포지토리에 push하기 위한 PAT
 
       - name: Update backend image tag in Helm values
         run: |
