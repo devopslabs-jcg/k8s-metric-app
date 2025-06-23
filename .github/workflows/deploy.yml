@@ -37,7 +37,7 @@ jobs:
         with:
           registry: ${{ env.GHCR_REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }} # GHCR은 GITHUB_TOKEN 사용이 표준
+          password: ${{ secrets.GHCR_TOKEN }} # GHCR은 GITHUB_TOKEN 사용이 표준
 
       - name: Extract commit SHA as image tag
         id: vars
