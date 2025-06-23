@@ -4,16 +4,19 @@ on:
   push:
     branches:
       - main
-    # [개선] 특정 폴더에 변경이 있을 때만 실행되도록 최적화
+    # 특정 폴더에 변경이 있을 때만 실행되도록 최적화
     paths:
       - 'backend/**'
       - 'frontend/**'
+      - '.github/workflows/**' # 워크플로우 파일 자체 변경 시에도 실행
 
 jobs:
   build-backend:
     runs-on: ubuntu-latest
-    # [개선] 백엔드 코드가 변경되었을 때만 이 job을 실행
-    if: github.event_name == 'push' && contains(toJson(github.event.commits), 'backend/')
+    # 백엔드 코드가 변경되었을 때만 이 job을 실행
+    if: |
+      github.event_name == 'push' && 
+      (contains(toJson(github.event.commits), 'backend/') || contains(toJson(github.event.commits), '.github/workflows/'))
 
     steps:
       - name: Checkout repository
@@ -32,18 +35,20 @@ jobs:
       - name: Build and push backend image
         uses: docker/build-push-action@v5
         with:
-          # [수정] 빌드 컨텍스트를 backend 폴더로 지정
+          # [핵심] 빌드 컨텍스트를 backend 폴더로 지정
           context: ./backend
-          # [수정] Dockerfile의 위치를 명시
+          # [핵심] Dockerfile의 위치를 명시
           file: ./backend/Dockerfile
           push: true
-          # [수정] 이미지 이름을 values.yaml과 일치시킴
+          # [핵심] 이미지 이름을 kubewatch-backend로 지정
           tags: ghcr.io/devopslabs-jcg/kubewatch-backend:latest
 
   build-frontend:
     runs-on: ubuntu-latest
-    # [개선] 프론트엔드 코드가 변경되었을 때만 이 job을 실행
-    if: github.event_name == 'push' && contains(toJson(github.event.commits), 'frontend/')
+    # 프론트엔드 코드가 변경되었을 때만 이 job을 실행
+    if: |
+      github.event_name == 'push' &&
+      (contains(toJson(github.event.commits), 'frontend/') || contains(toJson(github.event.commits), '.github/workflows/'))
 
     steps:
       - name: Checkout repository
@@ -62,10 +67,10 @@ jobs:
       - name: Build and push frontend image
         uses: docker/build-push-action@v5
         with:
-          # [수정] 빌드 컨텍스트를 frontend 폴더로 지정
+          # [핵심] 빌드 컨텍스트를 frontend 폴더로 지정
           context: ./frontend
-          # [수정] 프로덕션용 Dockerfile 위치를 명시
+          # [핵심] 프로덕션용 Dockerfile 위치를 명시
           file: ./frontend/Dockerfile.prod
           push: true
-          # [수정] 이미지 이름을 values.yaml과 일치시킴
+          # [핵심] 이미지 이름을 kubewatch-frontend로 지정
           tags: ghcr.io/devopslabs-jcg/kubewatch-frontend:latest
