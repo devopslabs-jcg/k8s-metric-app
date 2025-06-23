@@ -60,6 +60,7 @@ jobs:
           context: ./frontend
           file: ./frontend/Dockerfile.prod
           push: true
+          build-args: VITE_SOCKET_URL=http://kubewatch-backend-svc:5000
           # 커밋 해시 태그와 'latest' 태그를 동시에 푸시합니다.
           tags: |
             ${{ env.GHCR_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ steps.vars.outputs.sha_short }}
